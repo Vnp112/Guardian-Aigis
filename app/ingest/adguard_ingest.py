@@ -1,28 +1,33 @@
 import requests
 import pandas as pd
 from pathlib import Path
+import json
 
 ADGUARD_URL = "http://192.168.8.1/control/querylog?limit=1000"
+JSON_IN = Path("data/querylog.json")
 OUT = Path("data/sample_dns.csv")
 
-resp = requests.get(ADGUARD_URL)
-print(resp.status_code)
-print(resp.text[:200])
-#data = resp.json()
+# resp = requests.get(ADGUARD_URL)
+# data = resp.json()
+# print(resp.status.code)
+# print(resp.text[:200])
 
-
-def adguard_fetch(out_path: Path = OUT):
+def adguard_ingest_from_file(json_path: Path = JSON_IN, out_path: Path = OUT):
     """
-    Fetch DNS logs from AdGuard Home on the Flint2 and write
-    a normalized CSV with columns: time, client_ip, domain, qtype.
+    Read an AdGuard querylog JSON file (with top-level 'data' list),
+    normalize to time,client_ip,domain,qtype and write CSV.
     """
-    # 1. GET request to ADGUARD_URL (with timeout)
-    # 2. resp.json() -> dict; pull entries = dict["data"]
-    # 3. Build a list of dicts with keys: time, client_ip, domain, qtype
-    # 4. Create DataFrame from that list
-    # 5. Save to CSV at out_path
-    # 6. Return the DataFrame so you can inspect it if needed
-    resp = requests.get(ADGUARD_URL)
-    data = resp.json()
-    print(resp.status.code)
-    print(resp.text[:200])
+    with open(JSON_IN) as f:
+        obj = json.load(f)
+    entries = obj["data"]
+    rows = []
+    for entry in entries:
+        #print(entry["question"]["type"])
+        rows.append({"time": entry["time"],
+                     "client_ip": entry["client"],
+                     "domain": entry["question"]["name"],
+                     "qtype": entry["question"]["type"]})
+    
+    df = pd.DataFrame(rows)
+    df.to_csv(OUT, index=False)
+    return df
