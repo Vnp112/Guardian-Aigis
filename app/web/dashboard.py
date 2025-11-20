@@ -9,7 +9,8 @@ feats_p  = Path("data/features.csv")
 
 st.set_page_config(page_title="Guardian AIGIS — Phase 1", layout="wide")
 
-if st.button("Refresh (Build → Detect)"):
+if st.button("Refresh (Ingest → Build → Detect)"):
+    adguard_ingest_from_file()
     build_windows()
     detect()
 
