@@ -7,7 +7,7 @@ from app.ingest.adguard_ingest import adguard_ingest_from_file
 alerts_p = Path("data/alerts.csv")
 feats_p  = Path("data/features.csv")
 
-st.set_page_config(page_title="Guardian AIGIS — Phase 1", layout="wide")
+st.set_page_config(page_title="Guardian AIGIS", layout="wide")
 
 if st.button("Refresh (Ingest → Build → Detect)"):
     adguard_ingest_from_file()
