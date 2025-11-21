@@ -1,9 +1,6 @@
 import streamlit as st, pandas as pd
 import requests
 from pathlib import Path
-from app.features.build_features import build_windows
-from app.models.detector import detect
-from app.ingest.adguard_ingest import adguard_ingest_from_file
 
 URL = "http://127.0.0.1:8000"
 
@@ -12,19 +9,17 @@ def get_json(path: str):
     r.raise_for_status()
     return r.json()
 
+st.set_page_config(page_title="Guardian AIGIS", layout="wide")
+
+if st.button("Refresh (Ingest → Build → Detect)"):
+    requests.post(f"{URL}/refresh", timeout=10)
+    
 alerts_resp = get_json("/alerts")
 features_resp = get_json("/features")
 devices_resp = get_json("/devices")
 
 alerts = pd.DataFrame(alerts_resp["alerts"])
 feats = pd.DataFrame(features_resp["features"])
-
-st.set_page_config(page_title="Guardian AIGIS", layout="wide")
-
-if st.button("Refresh (Ingest → Build → Detect)"):
-    adguard_ingest_from_file()
-    build_windows()
-    detect()
 
 num_devices = 0
 highest_anomaly_score = 0.0
@@ -33,7 +28,7 @@ ip_list = []
 
 if not alerts.empty:
     # alerts = pd.read_csv(alerts_p, parse_dates=["minute"])
-    alerts["minute"] = pd.to_datetime(alerts["minute"])
+    alerts["minute"] = pd.to_datetime(alerts["minute"]).dt.tz_localize(None)
     num_devices = alerts["client_ip"].nunique() if not alerts.empty else 0
     highest_anomaly_score = alerts["score"].max() if not alerts.empty else 0.0
     last_time = str(alerts["minute"].max()) if not alerts.empty else None
@@ -41,7 +36,7 @@ else:
     st.info("No alerts yet. Click Refresh above.")
 
 if not feats.empty:
-    feats["minute"] = pd.to_datetime(feats["minute"])
+    #feats["minute"] = pd.to_datetime(feats["minute"])
     ip_list = devices_resp["devices"]
 else:
     st.info("No features yet. Click Refresh above.")
@@ -55,8 +50,9 @@ last_timestamp.metric(label="Last Time", value=last_time, border=True)
 
 if len(ip_list) > 0 and not alerts.empty:
     dropdown = st.selectbox(label="Pick Device", options=ip_list, index=None, placeholder="Select Device")
+    time_slider = st.select_slider(label="History Slider", options=["0", "1m", "5m", "10m", "30m", "1h", "2h", "3h", "4h", "5h", "6h", "1d", "2d"], value="0")
     if dropdown is not None:
-        history_resp = get_json(f"/devices/{dropdown}/history")
+        history_resp = get_json(f"/devices/{dropdown}/history?since={time_slider}")
         history = pd.DataFrame(history_resp["history"])
 
         if not history.empty:

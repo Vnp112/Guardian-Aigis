@@ -1,7 +1,13 @@
 from fastapi import FastAPI
 from pathlib import Path
+from datetime import datetime, timedelta
 import pandas as pd
 import json
+import requests
+
+from app.features.build_features import build_windows
+from app.models.detector import detect
+from app.ingest.adguard_ingest import adguard_ingest_from_file
 
 app = FastAPI()
 
@@ -9,6 +15,15 @@ def load_file(file):
     if not file.exists():
         return pd.DataFrame()
     return pd.read_csv(file)
+
+def parse_since(s: str):
+    if s.endswith("m"):
+        return timedelta(minutes=int(s[:-1]))
+    if s.endswith("h"):
+        return timedelta(hours=int(s[:-1]))
+    if s.endswith("d"):
+        return timedelta(days=int(s[:-1]))
+    return None
 
 @app.get("/")
 async def root():
@@ -33,7 +48,7 @@ def get_alerts():
     # if not path.exists():
     #     return {"alerts": []}
     # alerts_csv = pd.read_csv(path)
-    alerts_csv = load_file(path)
+    alerts_df = load_file(path)
     # Iterative method
     # rows = []
     # for idx, row in alerts_csv.iterrows():
@@ -45,24 +60,32 @@ def get_alerts():
     #                  "score": row["score"]})
     
     # Pandas built in conversion
-    rows = alerts_csv.to_dict(orient="records")
+    rows = alerts_df.to_dict(orient="records")
     return {"alerts": rows}
 
 @app.get("/devices")
 def get_devices():
     path = Path("data/features.csv")
-    features_csv = load_file(path)
-    rows = features_csv.to_dict(orient="records")
+    features_df = load_file(path)
+    rows = features_df.to_dict(orient="records")
     devices = sorted(set([row["client_ip"] for row in rows]))
     return {"devices": devices}
     
 @app.get("/devices/{ip}/history")
-def get_device_history(ip: str):
+def get_device_history(ip: str, since: str | None = None):
     path = Path("data/features.csv")
-    features_csv = load_file(path)
     if not path.exists():
         return {"ip": ip, "history": []}
-    ip_data = features_csv[features_csv["client_ip"] == ip].sort_values("minute")
+    features_df = load_file(path)
+    features_df["minute"] = pd.to_datetime(features_df["minute"]).dt.tz_localize(None)
+    ip_data = features_df[features_df["client_ip"] == ip].sort_values("minute")
+    if since:
+        delta = parse_since(since)
+        if delta:
+            latest = ip_data["minute"].max()
+            #cutoff = datetime.utcnow() - delta
+            cutoff = latest - delta
+            ip_data = ip_data[ip_data["minute"] >= cutoff]
     ip_data = ip_data.to_dict(orient="records")
     return{"ip": ip, "history": ip_data}
     
@@ -71,6 +94,20 @@ def get_features():
     path = Path("data/features.csv")
     if not path.exists():
         return {"features": []}
-    features_csv = load_file(path)
-    features = features_csv.to_dict(orient="records")
+    features_df = load_file(path)
+    features = features_df.to_dict(orient="records")
     return {"features": features}
+
+@app.post("/refresh")
+def refresh():
+    adguard_ingest_from_file()
+    build_windows()
+    detect()
+    return {"status": "ok"}
+
+@app.post("/control/login")
+def login():
+    s = requests.Session()
+    s.auth = ('admin', 'pword')
+    r = s.get('http://192.168.8.1:3000/control/login')
+    return {"name": "admin", "password": "pword"}
