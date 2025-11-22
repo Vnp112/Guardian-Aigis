@@ -8,6 +8,7 @@ import requests
 from app.features.build_features import build_windows
 from app.models.detector import detect
 from app.ingest.adguard_ingest import adguard_ingest_from_file
+from app.ingest.retrieve_logs import pull_logs
 
 app = FastAPI()
 
@@ -100,6 +101,7 @@ def get_features():
 
 @app.post("/refresh")
 def refresh():
+    pull_logs()
     adguard_ingest_from_file()
     build_windows()
     detect()

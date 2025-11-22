@@ -2,9 +2,6 @@
 __pycache__/
 *.pyc
 
-# Virtual environment
-.venv/
-
 # Local data logs (keep private)
 data/*.csv
 data/*.json
@@ -13,3 +10,16 @@ data/*.log
 # OS files
 .DS_Store
 Thumbs.db
+
+# Python virtual environments
+.venv/
+.venv_wsl/
+venv/
+env/
+
+# OS junk
+__pycache__/
+*.pyc
+
+# Data files
+data/querylog.json
